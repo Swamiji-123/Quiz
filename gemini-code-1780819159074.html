@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gurukul Smart ID Card Generator</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background: #0f0e1a; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; }
+        .card-container { background: #1a1830; padding: 40px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; width: 100%; max-width: 440px; box-sizing: border-box; }
+        h2 { color: #ffcc00; margin-bottom: 10px; font-size: 24px; }
+        p { opacity: 0.7; font-size: 14px; margin-bottom: 30px; }
+        
+        /* Search Interface Styling */
+        input { width: 100%; padding: 15px; border-radius: 8px; border: none; font-size: 18px; font-weight: bold; text-align: center; box-sizing: border-box; margin-bottom: 20px; background: #23204a; color: white; text-transform: uppercase; letter-spacing: 1px; }
+        input:focus { outline: 2px solid #ff9900; }
+        .primary-btn { background: #ff9900; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; box-sizing: border-box; }
+        .primary-btn:hover { background: #e68a00; }
+        #status-msg { color: #ff6584; font-size: 14px; margin-top: 15px; font-weight: bold; min-height: 20px; line-height: 1.4; }
+        
+        /* Card Preview Display Scaling */
+        .hidden-block { display: none; }
+        .preview-box { width: 100%; max-width: 340px; margin: 0 auto 20px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); display: block; background: #23204a; min-height: 510px; }
+        .download-btn { background: #43D4A4; color: #0f0e1a; border: none; padding: 15px 35px; font-size: 18px; border-radius: 50px; font-weight: bold; cursor: pointer; width: 100%; max-width: 340px; box-shadow: 0 4px 15px rgba(67,212,164,0.4); transition: 0.2s; }
+        .download-btn:hover { background: #38b58b; }
+        .back-link { display: block; margin-top: 20px; color: #ffcc00; text-decoration: none; font-size: 14px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="card-container" id="search-view">
+        <h2>ID Card Generator</h2>
+        <p>Enter Student Member ID to pull records from Google Sheets and generate the official ID card layout.</p>
+        
+        <input type="text" id="midInput" placeholder="e.g. AG5660" autocomplete="off">
+        <button class="primary-btn" onclick="fetchSpreadsheetRecord()">🔍 GENERATE ID CARD</button>
+        
+        <div id="status-msg"></div>
+    </div>
+
+    <div class="card-container hidden-block" id="renderer-view">
+        <h2>ID Card Generated!</h2>
+        <p style="color:#43D4A4; margin-bottom:20px;">Ready for printing vector file layers.</p>
+        
+        <canvas id="idCanvas" style="display:none;"></canvas>
+        <img id="idPreview" class="preview-box" src="" alt="Processing Identity Card...">
+        
+        <button class="download-btn" onclick="triggerJpgExport()">📥 DOWNLOAD ID CARD (JPG)</button>
+        <br>
+        <a href="#" onclick="window.location.reload()" class="back-link">⬅️ Search Another ID</a>
+    </div>
+
+    <script>
+        let globalMID = "";
+
+        // --- PHASE 1: GOOGLE SHEETS DATA STREAMING CONNECTION ---
+        function fetchSpreadsheetRecord() {
+            const mid = document.getElementById('midInput').value.trim().toUpperCase();
+            const statusDiv = document.getElementById('status-msg');
+            
+            statusDiv.style.color = "#ffcc00";
+            statusDiv.innerText = "Connecting to database registry...";
+
+            if(!mid) {
+                statusDiv.style.color = "#ff6584";
+                statusDiv.innerText = "Please enter a valid Member ID!";
+                return;
+            }
+
+            const sheetId = "18NOmoWF838mnzGK298FHPtt72HEN0lN3DhvvOxY5O0o";
+            const liveUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
+
+            fetch(liveUrl)
+                .then(response => {
+                    if (!response.ok) throw new Error('Database unreachable');
+                    return response.text();
+                })
+                .then(rawCsvText => {
+                    const rows = rawCsvText.split(/\r?\n/);
+                    let matchedRow = null;
+
+                    for (let i = 1; i < rows.length; i++) {
+                        const parsedColumns = splitCsvColumns(rows[i]);
+                        if (parsedColumns && parsedColumns[0]) {
+                            const cleanSheetMID = parsedColumns[0].replace(/["']/g, "").trim().toUpperCase();
+                            if (cleanSheetMID === mid) {
+                                matchedRow = parsedColumns;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (matchedRow) {
+                        statusDiv.style.color = "#43D4A4";
+                        statusDiv.innerText = "Match verified! Rendering graphic layers...";
+                        globalMID = mid;
+
+                        document.getElementById('search-view').style.display = "none";
+                        document.getElementById('renderer-view').classList.remove('hidden-block');
+
+                        const cleanField = (val) => val ? val.replace(/["']/g, "").trim() : "";
+
+                        const name = cleanField(matchedRow[1]).toUpperCase();
+                        const std = cleanField(matchedRow[2]).toUpperCase(); 
+                        const phone = cleanField(matchedRow[4]) || "—"; 
+                        const dob = cleanField(matchedRow[5]);
+                        const father = cleanField(matchedRow[6]).toUpperCase();
+                        const photoUrl = cleanField(matchedRow[7]);
+
+                        executeCanvasPipeline(mid, name, father, dob, phone, std, photoUrl);
+                    } else {
+                        statusDiv.style.color = "#ff6584";
+                        statusDiv.innerText = `Member ID "${mid}" was not found. Try an ID like AG5660 or AG6171.`;
+                    }
+                })
+                .catch(err => {
+                    statusDiv.style.color = "#ff6584";
+                    statusDiv.innerText = "Network extraction failed. Verify cloud permission hooks.";
+                    console.error(err);
+                });
+        }
+
+        // --- PHASE 2: CANVAS CORE RENDERING PIPELINE ---
+        function executeCanvasPipeline(mid, name, father, dob, phone, std, photoUrl) {
+            const canvas = document.getElementById('idCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Standard crisp design output canvas scaling parameters
+            canvas.width = 640;
+            canvas.height = 960;
+
+            let operationalAssets = 0;
+            const requiredAssetsCount = 2;
+
+            const baseTemplateImg = new Image();
+            baseTemplateImg.setAttribute('crossOrigin', 'anonymous');
+            baseTemplateImg.src = "https://res.cloudinary.com/dbji0xcjq/image/upload/v1780817890/SAmple_guytyn.jpg"; 
+
+            const studentPortraitImg = new Image();
+            studentPortraitImg.setAttribute('crossOrigin', 'anonymous');
+            studentPortraitImg.src = photoUrl;
+
+            function processSync() {
+                operationalAssets++;
+                if (operationalAssets === requiredAssetsCount) {
+                    drawCompositeCard();
+                }
+            }
+
+            baseTemplateImg.onload = processSync;
+            studentPortraitImg.onload = processSync;
+            
+            baseTemplateImg.onerror = () => { alert("Error displaying background template layer assets from Cloudinary."); };
+            studentPortraitImg.onerror = () => { processSync(); }; 
+
+            function drawCompositeCard() {
+                // Draw Cloudinary base background
+                ctx.drawImage(baseTemplateImg, 0, 0, canvas.width, canvas.height);
+
+                // Map circular portrait clip window frame mask (X: 320, Y: 375, Radius: 135)
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(320, 375, 135, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.clip();
+                
+                try {
+                    ctx.drawImage(studentPortraitImg, 185, 240, 270, 270);
+                } catch (e) {
+                    ctx.fillStyle = "#23204a";
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // Setup typography alignments
+                ctx.textBaseline = "middle";
+                
+                // Student Name (Centered layout positioning)
+                ctx.textAlign = "center";
+                ctx.font = "bold 34px Arial, Helvetica, sans-serif";
+                ctx.fillStyle = "#E46A13"; 
+                ctx.fillText(name, 320, 582);
+
+                // Father Name (Centered layout positioning)
+                ctx.font = "bold 22px Arial, Helvetica, sans-serif";
+                ctx.fillStyle = "#7A828A"; 
+                ctx.fillText("S/o. " + father, 320, 620);
+
+                // Render Dynamic Data Fields (Left-aligned text metrics tailored perfectly to each pre-printed title label)
+                ctx.textAlign = "left";
+                ctx.font = "bold 26px Arial, Helvetica, sans-serif";
+                ctx.fillStyle = "#1A1A1A"; 
+
+                ctx.fillText(mid, 372, 663);   // Sits right after "MID :"
+                ctx.fillText(dob, 412, 705);   // Sits right after "D.O.B. :"
+                ctx.fillText(phone, 442, 747); // Sits right after "Phone No. :"
+                ctx.fillText(std, 386, 788);   // Sits right after "STD .:"
+
+                document.getElementById('idPreview').src = canvas.toDataURL("image/jpeg", 0.95);
+            }
+        }
+
+        function triggerJpgExport() {
+            const canvas = document.getElementById('idCanvas');
+            const downloadHook = document.createElement('a');
+            downloadHook.download = `ID_Card_${globalMID}.jpg`;
+            downloadHook.href = canvas.toDataURL("image/jpeg", 0.95);
+            downloadHook.click();
+        }
+
+        function splitCsvColumns(textLine) {
+            let columnValue = '', outputArray = [];
+            let insideQuote = false;
+            for (let i = 0; i < textLine.length; i++) {
+                let char = textLine[i];
+                if (char === '"') { insideQuote = !insideQuote; }
+                else if (char === ',' && !insideQuote) { outputArray.push(columnValue); columnValue = ''; }
+                else { columnValue += char; }
+            }
+            outputArray.push(columnValue);
+            return outputArray;
+        }
+    </script>
+</body>
+</html>
