@@ -10,14 +10,14 @@
         h2 { color: #ffcc00; margin-bottom: 10px; font-size: 24px; }
         p { opacity: 0.7; font-size: 14px; margin-bottom: 30px; }
         
-        /* Search Interface Styling */
+        /* Search Box Interface */
         input { width: 100%; padding: 15px; border-radius: 8px; border: none; font-size: 18px; font-weight: bold; text-align: center; box-sizing: border-box; margin-bottom: 20px; background: #23204a; color: white; text-transform: uppercase; letter-spacing: 1px; }
         input:focus { outline: 2px solid #ff9900; }
         .primary-btn { background: #ff9900; color: white; border: none; padding: 15px; width: 100%; font-size: 18px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; box-sizing: border-box; }
         .primary-btn:hover { background: #e68a00; }
         #status-msg { color: #ff6584; font-size: 14px; margin-top: 15px; font-weight: bold; min-height: 20px; line-height: 1.4; }
         
-        /* Card Preview Display Scaling */
+        /* Renderer View Framework */
         .hidden-block { display: none; }
         .preview-box { width: 100%; max-width: 340px; margin: 0 auto 20px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); display: block; background: #23204a; min-height: 510px; }
         .download-btn { background: #43D4A4; color: #0f0e1a; border: none; padding: 15px 35px; font-size: 18px; border-radius: 50px; font-weight: bold; cursor: pointer; width: 100%; max-width: 340px; box-shadow: 0 4px 15px rgba(67,212,164,0.4); transition: 0.2s; }
@@ -29,7 +29,7 @@
 
     <div class="card-container" id="search-view">
         <h2>ID Card Generator</h2>
-        <p>Enter Student Member ID to pull records from Google Sheets and generate the official ID card layout.</p>
+        <p>Enter Student Member ID to safely pull records from Google Sheets and generate the official ID card.</p>
         
         <input type="text" id="midInput" placeholder="e.g. AG5660" autocomplete="off">
         <button class="primary-btn" onclick="fetchSpreadsheetRecord()">🔍 GENERATE ID CARD</button>
@@ -42,7 +42,7 @@
         <p style="color:#43D4A4; margin-bottom:20px;">Ready for printing vector file layers.</p>
         
         <canvas id="idCanvas" style="display:none;"></canvas>
-        <img id="idPreview" class="preview-box" src="" alt="Processing Identity Card...">
+        <img id="idPreview" class="preview-box" src="" alt="Processing Identity Card Proportions...">
         
         <button class="download-btn" onclick="triggerJpgExport()">📥 DOWNLOAD ID CARD (JPG)</button>
         <br>
@@ -52,7 +52,7 @@
     <script>
         let globalMID = "";
 
-        // --- PHASE 1: GOOGLE SHEETS DATA STREAMING CONNECTION ---
+        // --- PHASE 1: CONNECT TO CLOUD STORAGE REGISTRY ---
         function fetchSpreadsheetRecord() {
             const mid = document.getElementById('midInput').value.trim().toUpperCase();
             const statusDiv = document.getElementById('status-msg');
@@ -101,15 +101,14 @@
 
                         const name = cleanField(matchedRow[1]).toUpperCase();
                         const std = cleanField(matchedRow[2]).toUpperCase(); 
-                        const phone = cleanField(matchedRow[4]) || "—"; 
                         const dob = cleanField(matchedRow[5]);
                         const father = cleanField(matchedRow[6]).toUpperCase();
                         const photoUrl = cleanField(matchedRow[7]);
 
-                        executeCanvasPipeline(mid, name, father, dob, phone, std, photoUrl);
+                        executeCanvasPipeline(mid, name, father, dob, std, photoUrl);
                     } else {
                         statusDiv.style.color = "#ff6584";
-                        statusDiv.innerText = `Member ID "${mid}" was not found. Try an ID like AG5660 or AG6171.`;
+                        statusDiv.innerText = `Member ID "${mid}" was not found in the spreadsheet rows registry.`;
                     }
                 })
                 .catch(err => {
@@ -119,12 +118,11 @@
                 });
         }
 
-        // --- PHASE 2: CANVAS CORE RENDERING PIPELINE ---
-        function executeCanvasPipeline(mid, name, father, dob, phone, std, photoUrl) {
+        // --- PHASE 2: DESIGN GENERATOR ---
+        function executeCanvasPipeline(mid, name, father, dob, std, photoUrl) {
             const canvas = document.getElementById('idCanvas');
             const ctx = canvas.getContext('2d');
             
-            // Standard crisp design output canvas scaling parameters
             canvas.width = 640;
             canvas.height = 960;
 
@@ -153,10 +151,9 @@
             studentPortraitImg.onerror = () => { processSync(); }; 
 
             function drawCompositeCard() {
-                // Draw Cloudinary base background
                 ctx.drawImage(baseTemplateImg, 0, 0, canvas.width, canvas.height);
 
-                // Map circular portrait clip window frame mask (X: 320, Y: 375, Radius: 135)
+                // Map circular portrait mask (X: 320, Y: 375, Radius: 135)
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(320, 375, 135, 0, Math.PI * 2, true);
@@ -171,29 +168,29 @@
                 }
                 ctx.restore();
 
-                // Setup typography alignments
                 ctx.textBaseline = "middle";
                 
-                // Student Name (Centered layout positioning)
+                // Student Full Name
                 ctx.textAlign = "center";
                 ctx.font = "bold 34px Arial, Helvetica, sans-serif";
                 ctx.fillStyle = "#E46A13"; 
                 ctx.fillText(name, 320, 582);
 
-                // Father Name (Centered layout positioning)
+                // Father Name
                 ctx.font = "bold 22px Arial, Helvetica, sans-serif";
                 ctx.fillStyle = "#7A828A"; 
                 ctx.fillText("S/o. " + father, 320, 620);
 
-                // Render Dynamic Data Fields (Left-aligned text metrics tailored perfectly to each pre-printed title label)
+                // Left align data fields directly in front of pre-printed title labels
                 ctx.textAlign = "left";
                 ctx.font = "bold 26px Arial, Helvetica, sans-serif";
                 ctx.fillStyle = "#1A1A1A"; 
 
-                ctx.fillText(mid, 372, 663);   // Sits right after "MID :"
-                ctx.fillText(dob, 412, 705);   // Sits right after "D.O.B. :"
-                ctx.fillText(phone, 442, 747); // Sits right after "Phone No. :"
-                ctx.fillText(std, 386, 788);   // Sits right after "STD .:"
+                // Tailored alignments for the template layout spacing fields
+                ctx.fillText(mid, 372, 663);   // MID :
+                ctx.fillText(dob, 412, 705);   // D.O.B. :
+                ctx.fillText("—", 442, 747);   // Phone No. :
+                ctx.fillText(std, 386, 788);   // STD .:
 
                 document.getElementById('idPreview').src = canvas.toDataURL("image/jpeg", 0.95);
             }
